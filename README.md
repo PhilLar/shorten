@@ -9,7 +9,7 @@ Installation
 Install `short` from sources, by running:
 
 ```sh
-git clone https://github.com/PhilLar/short.git
+git clone https://github.com/PhilLar/shorten.git
 cd short
 go install ./cmd/short
 ```
@@ -24,8 +24,8 @@ https://cleanuri.com/xyZM0Q
 
 Contribute
 ----------
-- Issue Tracker: https://github.com/PhilLar/short/issues
-- Source Code: https://github.com/PhilLar/short
+- Issue Tracker: https://github.com/PhilLar/shorten/issues
+- Source Code: https://github.com/PhilLar/shorten
 
 License
 --------
