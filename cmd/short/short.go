@@ -9,28 +9,32 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"bytes"
 )
 
-var api string = "https://cleanuri.com/api/v1/shorten"
+const CleanUrl_api string = "https://cleanuri.com/api/v1/shorten"
+const Relink_api string = "https://rel.ink/api/links/"
 
 var flagRelink *bool = flag.Bool("relink", false, "a bool")
 
-type ApiAnswer struct {
+type CleanApiAnswer struct {
 	Result_url string
 	Error      string
 }
+
+
 
 func ShortenUrl() (string, error) {
 	flag.Parse()
 	if !*flagRelink {
 		return  CleanUrl(flag.Arg(0))
 	} else {
-		return "", errors.New("underdone")
+		return Relink(flag.Arg(0))
 	}
 }
 
 func CleanUrl(url_link string) (string, error) {
-	resp, err := http.PostForm(api, url.Values{
+	resp, err := http.PostForm(CleanUrl_api, url.Values{
 		"url": {url_link},
 	})
 	if err != nil {
@@ -42,7 +46,7 @@ func CleanUrl(url_link string) (string, error) {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	answer := &ApiAnswer{}
+	answer := &CleanApiAnswer{}
 	err = json.Unmarshal(body, answer)
 	if err != nil {
 		log.Fatalln(err)
@@ -54,7 +58,30 @@ func CleanUrl(url_link string) (string, error) {
 	}
 }
 
-//func CleanUrl(url_link string) (string, error) {
+func Relink(url_link string) (string, error) {
+	jsn, err := json.Marshal(map[string]string{
+		"url":url_link,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	resp, err := http.Post("https://rel.ink/api/links/", "application/json", bytes.NewBuffer(jsn))
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	answer := make(map[string]interface{})
+	err = json.Unmarshal(body, &answer)
+	if err != nil {
+		log.Fatal(err)
+	}
+	clean_url := "https://rel.ink/" + answer["hashid"].(string)
+	return  clean_url, err
+}
 
 func main() {
 	result, err := ShortenUrl()
