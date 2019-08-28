@@ -97,13 +97,15 @@ func Relink(urlLink string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-
-	short, ok := answer["hashid"].(string)
+	shortValue, ok := answer["hashid"]
+	if !ok {
+		return "", errors.New("hashid not found")
+	}
+	short, ok := shortValue.(string)
 	if !ok {
 		return "", errors.New("failed in type assertion")
-	} else if short == "" {
-		return "", errors.New("key 'hashid' not fount")
 	}
+
 	cleanUrl := "https://rel.ink/" + short
 	return cleanUrl, err
 }
