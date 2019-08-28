@@ -28,13 +28,11 @@ func RunInParallel(a func(urlLink string) (string, error), args []string) map[st
 	shorts := make(map[string]error)
 	var mutex = &sync.Mutex{}
 	var wg sync.WaitGroup
-	var short string
-	var err error
 	wg.Add(len(args))
 	for _, arg := range args {
 		go func(arg string) {
 			defer wg.Done()
-			short, err = a(arg)
+			short, err := a(arg)
 			mutex.Lock()
 			shorts[short] = err
 			mutex.Unlock()
