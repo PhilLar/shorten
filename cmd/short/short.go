@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -9,84 +10,113 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"bytes"
+	"sync"
 )
 
-const CleanUrl_api string = "https://cleanuri.com/api/v1/shorten"
-const Relink_api string = "https://rel.ink/api/links/"
+const CleanUrlApi string = "https://cleanuri.com/api/v1/shorten"
+const RelinkApi string = "https://rel.ink/api/links/"
 
-var flagRelink *bool = flag.Bool("relink", false, "a bool")
+var flagRelink *bool = flag.Bool("relink", false, "use rel.ink service to shorten URL")
 
-type CleanApiAnswer struct {
-	Result_url string
-	Error      string
+type CleanUrlAnswer struct {
+	ResultUrl string `json:"result_url"`
+	Error     string
 }
 
+// Wrapper for CleanUrl() and Relink()
+func RunInParallel(a func(urlLink string) (string, error), args []string) map[string]error {
+	shorts := make(map[string]error)
+	var mutex = &sync.Mutex{}
+	var wg sync.WaitGroup
+	wg.Add(len(args))
+	for _, arg := range args {
+		go func(arg string) {
+			defer wg.Done()
+			short, err := a(arg)
+			mutex.Lock()
+			shorts[short] = err
+			mutex.Unlock()
+		}(arg)
+	}
+	wg.Wait()
+	return shorts
+}
 
-
-func ShortenUrl() (string, error) {
+func ShortenUrls() map[string]error {
 	flag.Parse()
 	if !*flagRelink {
-		return  CleanUrl(flag.Arg(0))
+		return RunInParallel(CleanUrl, flag.Args())
 	} else {
-		return Relink(flag.Arg(0))
+		return RunInParallel(Relink, flag.Args())
 	}
 }
 
-func CleanUrl(url_link string) (string, error) {
-	resp, err := http.PostForm(CleanUrl_api, url.Values{
-		"url": {url_link},
+func CleanUrl(urlLink string) (string, error) {
+	resp, err := http.PostForm(CleanUrlApi, url.Values{
+		"url": {urlLink},
 	})
 	if err != nil {
-		log.Fatalln(err)
+		return "", err
 	}
 	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		log.Fatalln(err)
+		return "", err
 	}
-	answer := &CleanApiAnswer{}
+	answer := &CleanUrlAnswer{}
 	err = json.Unmarshal(body, answer)
 	if err != nil {
-		log.Fatalln(err)
+		return "", err
 	}
 	if answer.Error != "" {
 		return "", errors.New(answer.Error)
 	} else {
-		return answer.Result_url, nil
+		return answer.ResultUrl, nil
 	}
 }
 
-func Relink(url_link string) (string, error) {
+func Relink(urlLink string) (string, error) {
 	jsn, err := json.Marshal(map[string]string{
-		"url":url_link,
+		"url": urlLink,
 	})
 	if err != nil {
-		log.Fatal(err)
+		return "", err
 	}
-	resp, err := http.Post("https://rel.ink/api/links/", "application/json", bytes.NewBuffer(jsn))
+	resp, err := http.Post(RelinkApi, "application/json", bytes.NewBuffer(jsn))
 	if err != nil {
-		log.Fatal(err)
+		return "", err
 	}
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		log.Fatalln(err)
+		return "", err
 	}
 	answer := make(map[string]interface{})
 	err = json.Unmarshal(body, &answer)
 	if err != nil {
-		log.Fatal(err)
+		return "", err
 	}
-	clean_url := "https://rel.ink/" + answer["hashid"].(string)
-	return  clean_url, err
+	shortValue, ok := answer["hashid"]
+	if !ok {
+		return "", errors.New("hashid not found")
+	}
+	short, ok := shortValue.(string)
+	if !ok {
+		return "", errors.New("failed in type assertion")
+	}
+
+	cleanUrl := "https://rel.ink/" + short
+	return cleanUrl, err
 }
 
 func main() {
-	result, err := ShortenUrl()
-	if err != nil {
-		log.Fatal(err)
+	resultMap := ShortenUrls()
+	for short, err := range resultMap {
+		if err == nil {
+			fmt.Println(short)
+		} else {
+			log.Fatal(err)
+		}
 	}
-	fmt.Println(result)
 }
